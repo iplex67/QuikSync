@@ -50,8 +50,12 @@ namespace QuikSync
             this.closeWindowBtn = new System.Windows.Forms.Button();
             this.label1 = new System.Windows.Forms.Label();
             this.logoPictureBox = new System.Windows.Forms.PictureBox();
+            this.groupBox2 = new System.Windows.Forms.GroupBox();
+            this.previewHostBtn = new System.Windows.Forms.Button();
+            this.previewJoinedBtn = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
             this.groupBox1.SuspendLayout();
+            this.groupBox2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.logoPictureBox)).BeginInit();
             this.SuspendLayout();
             // 
@@ -202,8 +206,44 @@ namespace QuikSync
             this.deleteBtn.UseVisualStyleBackColor = true;
             this.deleteBtn.Click += new System.EventHandler(this.deleteBtn_Click);
             // 
+            // groupBox2
+            //
+            this.groupBox2.Controls.Add(this.previewJoinedBtn);
+            this.groupBox2.Controls.Add(this.previewHostBtn);
+            this.groupBox2.ForeColor = System.Drawing.SystemColors.Menu;
+            this.groupBox2.Location = new System.Drawing.Point(576, 208);
+            this.groupBox2.Name = "groupBox2";
+            this.groupBox2.Size = new System.Drawing.Size(97, 85);
+            this.groupBox2.TabIndex = 7;
+            this.groupBox2.TabStop = false;
+            this.groupBox2.Text = "Preview";
+            //
+            // previewHostBtn
+            //
+            this.previewHostBtn.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.previewHostBtn.ForeColor = System.Drawing.SystemColors.Menu;
+            this.previewHostBtn.Location = new System.Drawing.Point(7, 23);
+            this.previewHostBtn.Name = "previewHostBtn";
+            this.previewHostBtn.Size = new System.Drawing.Size(83, 23);
+            this.previewHostBtn.TabIndex = 1;
+            this.previewHostBtn.Text = "Host file";
+            this.previewHostBtn.UseVisualStyleBackColor = true;
+            this.previewHostBtn.Click += new System.EventHandler(this.previewHostBtn_Click);
+            //
+            // previewJoinedBtn
+            //
+            this.previewJoinedBtn.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.previewJoinedBtn.ForeColor = System.Drawing.SystemColors.Menu;
+            this.previewJoinedBtn.Location = new System.Drawing.Point(7, 52);
+            this.previewJoinedBtn.Name = "previewJoinedBtn";
+            this.previewJoinedBtn.Size = new System.Drawing.Size(83, 23);
+            this.previewJoinedBtn.TabIndex = 2;
+            this.previewJoinedBtn.Text = "Joined file";
+            this.previewJoinedBtn.UseVisualStyleBackColor = true;
+            this.previewJoinedBtn.Click += new System.EventHandler(this.previewJoinedBtn_Click);
+            //
             // doneBtn
-            // 
+            //
             this.doneBtn.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.doneBtn.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
             this.doneBtn.ForeColor = System.Drawing.SystemColors.Menu;
@@ -275,16 +315,19 @@ namespace QuikSync
             this.Controls.Add(this.minimizeBtn);
             this.Controls.Add(this.closeWindowBtn);
             this.Controls.Add(this.doneBtn);
+            this.Controls.Add(this.groupBox2);
             this.Controls.Add(this.groupBox1);
             this.Controls.Add(this.dataGridView1);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "ConflictSolverForm";
             this.Text = "QuikSync Conflict Solving";
+            this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.ConflictSolverForm_FormClosed);
             this.Paint += new System.Windows.Forms.PaintEventHandler(this.ConflictSolverForm_Paint);
             this.MouseDown += new System.Windows.Forms.MouseEventHandler(this.ConflictSolverForm_MouseDown);
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).EndInit();
             this.groupBox1.ResumeLayout(false);
+            this.groupBox2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.logoPictureBox)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -311,5 +354,8 @@ namespace QuikSync
         private System.Windows.Forms.Button closeWindowBtn;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.PictureBox logoPictureBox;
+        private System.Windows.Forms.GroupBox groupBox2;
+        private System.Windows.Forms.Button previewHostBtn;
+        private System.Windows.Forms.Button previewJoinedBtn;
     }
 }

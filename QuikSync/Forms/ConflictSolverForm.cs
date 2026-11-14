@@ -4,6 +4,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using QuikSync.LocalWorks.FileWorks;
 using QuikSync.NetWorks.ConflictWorks;
 using QuikSync.Properties;
 
@@ -22,10 +23,13 @@ namespace QuikSync
         public List<SyncAction> actions;
         public List<FileExistanceStatus> existanceStatuses;
 
-        public ConflictSolverForm(List<FileDiffData> fdd)
+        private FilePreviewer previewer;
+
+        public ConflictSolverForm(List<FileDiffData> fdd, FilePreviewer previewer)
         {
             InitializeComponent();
             diffs = fdd;
+            this.previewer = previewer;
 
             actions = new List<SyncAction>();
             existanceStatuses = new List<FileExistanceStatus>();
@@ -181,6 +185,58 @@ namespace QuikSync
         private void skipBtn_Click(object sender, EventArgs e)
         {
             SetForSelectedRowsAction(SyncAction.Skip);
+        }
+
+        private void previewHostBtn_Click(object sender, EventArgs e)
+        {
+            PreviewSelectedFile(FileExistanceStatus.ExistsOnJoined, "Host", previewer.PreviewHostFile);
+        }
+
+        private void previewJoinedBtn_Click(object sender, EventArgs e)
+        {
+            PreviewSelectedFile(FileExistanceStatus.ExistsOnHost, "Joined", previewer.PreviewLocalFile);
+        }
+
+        /// <summary>
+        /// Opens a temporary copy of the first selected file, so user could see which version has to be kept.
+        /// </summary>
+        /// <param name="missingStatus">Existance status that means the file is not there on the previewed side.</param>
+        /// <param name="side">Name of the previewed side for messages.</param>
+        /// <param name="preview">Function that makes the copy and opens it.</param>
+        private void PreviewSelectedFile(FileExistanceStatus missingStatus, string side, Func<string, string> preview)
+        {
+            if (dataGridView1.SelectedRows.Count == 0)
+            {
+                MessageBox.Show("Select a file to preview first.", "QuikSync", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int index = dataGridView1.SelectedRows[0].Index;
+
+            if (existanceStatuses[index] == missingStatus)
+            {
+                MessageBox.Show($"The file does not exist on {side}.", "QuikSync", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Cursor = Cursors.WaitCursor;
+            try
+            {
+                preview(diffs[index].FileRelativePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not preview the file: {ex.Message}", "QuikSync", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
+        }
+
+        private void ConflictSolverForm_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            previewer.CleanUp();
         }
 
         private void closeWindowBtn_Click(object sender, EventArgs e)

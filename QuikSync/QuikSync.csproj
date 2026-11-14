@@ -83,6 +83,7 @@
     <Compile Include="LocalWorks\SessionWorks\SessionHandler.cs" />
     <Compile Include="LocalWorks\SetupWorks\SetupFileHandler.cs" />
     <Compile Include="LocalWorks\FileWorks\FolderHandler.cs" />
+    <Compile Include="LocalWorks\FileWorks\FilePreviewer.cs" />
     <Compile Include="LocalWorks\FileWorks\FilerHashesIO.cs" />
     <Compile Include="NetWorks\Joined.cs" />
     <Compile Include="Forms\ConflictSolverForm.cs">

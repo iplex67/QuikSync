@@ -13,7 +13,7 @@ namespace QuikSync.NetWorks.ConflictWorks
         public List<SyncAction> saList = new List<SyncAction>();
         public HashSet<string> ProcessedRelativePathes = new HashSet<string>();
 
-        public Syncronizer(List<FileData> Joined, List<FileData> Host)
+        public Syncronizer(List<FileData> Joined, List<FileData> Host, FilePreviewer previewer)
         {
             // Computing files that could be conflicted to Host.
             for (int i = 0; i < Joined.Count; i++)
@@ -73,7 +73,7 @@ namespace QuikSync.NetWorks.ConflictWorks
                 }
             }
 
-            ConflictSolverForm conflictSolverForm = new ConflictSolverForm(fdd.ToList());
+            ConflictSolverForm conflictSolverForm = new ConflictSolverForm(fdd.ToList(), previewer);
             conflictSolverForm.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             conflictSolverForm.ShowDialog();
             saList = conflictSolverForm.actions;
