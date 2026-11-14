@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using QuikSync.LocalWorks.FileWorks;
 using QuikSync.NetWorks.ConflictWorks;
@@ -24,6 +25,12 @@ namespace QuikSync
         public List<FileExistanceStatus> existanceStatuses;
 
         private FilePreviewer previewer;
+
+        /// <summary>
+        /// True while a preview is being prepared. Previews run off the dialog thread, so the window stays responsive,
+        /// but it cannot be closed until the temporary files are done.
+        /// </summary>
+        private bool previewBusy;
 
         public ConflictSolverForm(List<FileDiffData> fdd, FilePreviewer previewer)
         {
@@ -187,14 +194,14 @@ namespace QuikSync
             SetForSelectedRowsAction(SyncAction.Skip);
         }
 
-        private void previewHostBtn_Click(object sender, EventArgs e)
+        private async void previewHostBtn_Click(object sender, EventArgs e)
         {
-            PreviewSelectedFile(FileExistanceStatus.ExistsOnJoined, "Host", previewer.PreviewHostFile);
+            await PreviewSelectedFile(FileExistanceStatus.ExistsOnJoined, "Host", previewer.PreviewHostFile);
         }
 
-        private void previewJoinedBtn_Click(object sender, EventArgs e)
+        private async void previewJoinedBtn_Click(object sender, EventArgs e)
         {
-            PreviewSelectedFile(FileExistanceStatus.ExistsOnHost, "Joined", previewer.PreviewLocalFile);
+            await PreviewSelectedFile(FileExistanceStatus.ExistsOnHost, "Joined", previewer.PreviewLocalFile);
         }
 
         /// <summary>
@@ -203,7 +210,7 @@ namespace QuikSync
         /// <param name="missingStatus">Existance status that means the file is not there on the previewed side.</param>
         /// <param name="side">Name of the previewed side for messages.</param>
         /// <param name="preview">Function that makes the copy and opens it.</param>
-        private void PreviewSelectedFile(FileExistanceStatus missingStatus, string side, Func<string, string> preview)
+        private async Task PreviewSelectedFile(FileExistanceStatus missingStatus, string side, Func<string, string> preview)
         {
             if (dataGridView1.SelectedRows.Count == 0)
             {
@@ -219,10 +226,12 @@ namespace QuikSync
                 return;
             }
 
-            Cursor = Cursors.WaitCursor;
+            string rel = diffs[index].FileRelativePath;
+
+            SetPreviewBusy(true);
             try
             {
-                preview(diffs[index].FileRelativePath);
+                await Task.Run(() => preview(rel));
             }
             catch (Exception ex)
             {
@@ -230,8 +239,29 @@ namespace QuikSync
             }
             finally
             {
-                Cursor = Cursors.Default;
+                SetPreviewBusy(false);
             }
+        }
+
+        private void SetPreviewBusy(bool busy)
+        {
+            previewBusy = busy;
+            previewHostBtn.Enabled = !busy;
+            previewJoinedBtn.Enabled = !busy;
+            Cursor = busy ? Cursors.AppStarting : Cursors.Default;
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (previewBusy)
+            {
+                // A download is still writing into the temporary directory that CleanUp removes.
+                e.Cancel = true;
+                MessageBox.Show("A preview is still being prepared. Wait for it to finish.", "QuikSync", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            base.OnFormClosing(e);
         }
 
         private void ConflictSolverForm_FormClosed(object sender, FormClosedEventArgs e)

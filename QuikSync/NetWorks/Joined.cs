@@ -29,6 +29,11 @@ namespace QuikSync.NetWorks
         readonly ManualResetEventSlim downloadFinished = new ManualResetEventSlim(false);
 
         /// <summary>
+        /// Exception that stopped the last download inside of StreamReceived, null if it did not fail.
+        /// </summary>
+        volatile Exception downloadError;
+
+        /// <summary>
         /// Constructor that initializes Joined object based on given TCPSettings.
         /// </summary>
         /// <param name="c">TCPSettings for Joined work.</param>
@@ -75,38 +80,51 @@ namespace QuikSync.NetWorks
         /// <param name="args"></param>
         private void StreamReceived(object sender, StreamReceivedFromServerEventArgs args)
         {
-            UIHandler.WriteLog($"Downloading {DownloadFileTo.Replace(Filed.RootPath, "")}...");
             gettingFile = true;
+            downloadError = null;
 
-            UIHandler.ResetProgressBar();
-
-            long bytesRemaining = args.ContentLength;
-            int bytesRead = 0;
-            byte[] buffer = new byte[bufferSize];
-
-            UIHandler.SetProgressBarMaxValue((int)bytesRemaining);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(DownloadFileTo));
-
-            using (FileStream fs = new FileStream(DownloadFileTo, FileMode.CreateNew))
+            try
             {
-                while (bytesRemaining > 0)
+                UIHandler.WriteLog($"Downloading {DownloadFileTo.Replace(Filed.RootPath, "")}...");
+
+                UIHandler.ResetProgressBar();
+
+                long bytesRemaining = args.ContentLength;
+                int bytesRead = 0;
+                byte[] buffer = new byte[bufferSize];
+
+                UIHandler.SetProgressBarMaxValue((int)bytesRemaining);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(DownloadFileTo));
+
+                using (FileStream fs = new FileStream(DownloadFileTo, FileMode.CreateNew))
                 {
-                    bytesRead = args.DataStream.Read(buffer, 0, buffer.Length);
-                    if (bytesRead > 0)
+                    while (bytesRemaining > 0)
                     {
-                        fs.Write(buffer, 0, bytesRead);
-                        UIHandler.IncrementProgressBarValue(bytesRead);
-                        bytesRemaining -= bytesRead;
+                        bytesRead = args.DataStream.Read(buffer, 0, buffer.Length);
+                        if (bytesRead > 0)
+                        {
+                            fs.Write(buffer, 0, bytesRead);
+                            UIHandler.IncrementProgressBarValue(bytesRead);
+                            bytesRemaining -= bytesRead;
+                        }
                     }
                 }
+
+                DownloadFileTo = "";
+                clientH.Events.StreamReceived -= StreamReceived;
             }
-
-            DownloadFileTo = "";
-            clientH.Events.StreamReceived -= StreamReceived;
-
-            gettingFile = false;
-            downloadFinished.Set();
+            catch (Exception ex)
+            {
+                // Remember why the download stopped, so a caller that waits for it can report it instead of waiting forever.
+                downloadError = ex;
+                throw;
+            }
+            finally
+            {
+                gettingFile = false;
+                downloadFinished.Set();
+            }
         }
 
         /// <summary>
@@ -178,6 +196,7 @@ namespace QuikSync.NetWorks
             }
 
             downloadFinished.Reset();
+            downloadError = null;
             DownloadFileTo = fullPath;
 
             // The constructor already subscribed StreamReceived. Subscribing it twice would run the handler twice for
@@ -195,6 +214,9 @@ namespace QuikSync.NetWorks
                     if (!gettingFile || !clientH.Connected)
                         throw new TimeoutException($"Host did not send {rel}.");
                 }
+
+                if (downloadError != null)
+                    throw new IOException($"Could not save {rel}: {downloadError.Message}", downloadError);
             }
             finally
             {
