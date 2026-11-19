@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using QuikSync.LocalWorks.FileWorks;
 using QuikSync.NetWorks.ConflictWorks;
 using WatsonTcp;
@@ -21,6 +22,16 @@ namespace QuikSync.NetWorks
         string DownloadFileTo;
 
         List<FileData> FDGotFromServer;
+
+        /// <summary>
+        /// Set when the file that is being downloaded is completely received.
+        /// </summary>
+        readonly ManualResetEventSlim downloadFinished = new ManualResetEventSlim(false);
+
+        /// <summary>
+        /// Exception that stopped the last download inside of StreamReceived, null if it did not fail.
+        /// </summary>
+        volatile Exception downloadError;
 
         /// <summary>
         /// Constructor that initializes Joined object based on given TCPSettings.
@@ -69,37 +80,51 @@ namespace QuikSync.NetWorks
         /// <param name="args"></param>
         private void StreamReceived(object sender, StreamReceivedFromServerEventArgs args)
         {
-            UIHandler.WriteLog($"Downloading {DownloadFileTo.Replace(Filed.RootPath, "")}...");
             gettingFile = true;
+            downloadError = null;
 
-            UIHandler.ResetProgressBar();
-
-            long bytesRemaining = args.ContentLength;
-            int bytesRead = 0;
-            byte[] buffer = new byte[bufferSize];
-
-            UIHandler.SetProgressBarMaxValue((int)bytesRemaining);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(DownloadFileTo));
-
-            using (FileStream fs = new FileStream(DownloadFileTo, FileMode.CreateNew))
+            try
             {
-                while (bytesRemaining > 0)
+                UIHandler.WriteLog($"Downloading {DownloadFileTo.Replace(Filed.RootPath, "")}...");
+
+                UIHandler.ResetProgressBar();
+
+                long bytesRemaining = args.ContentLength;
+                int bytesRead = 0;
+                byte[] buffer = new byte[bufferSize];
+
+                UIHandler.SetProgressBarMaxValue((int)bytesRemaining);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(DownloadFileTo));
+
+                using (FileStream fs = new FileStream(DownloadFileTo, FileMode.CreateNew))
                 {
-                    bytesRead = args.DataStream.Read(buffer, 0, buffer.Length);
-                    if (bytesRead > 0)
+                    while (bytesRemaining > 0)
                     {
-                        fs.Write(buffer, 0, bytesRead);
-                        UIHandler.IncrementProgressBarValue(bytesRead);
-                        bytesRemaining -= bytesRead;
+                        bytesRead = args.DataStream.Read(buffer, 0, buffer.Length);
+                        if (bytesRead > 0)
+                        {
+                            fs.Write(buffer, 0, bytesRead);
+                            UIHandler.IncrementProgressBarValue(bytesRead);
+                            bytesRemaining -= bytesRead;
+                        }
                     }
                 }
+
+                DownloadFileTo = "";
+                clientH.Events.StreamReceived -= StreamReceived;
             }
-
-            DownloadFileTo = "";
-            clientH.Events.StreamReceived -= StreamReceived;
-
-            gettingFile = false;
+            catch (Exception ex)
+            {
+                // Remember why the download stopped, so a caller that waits for it can report it instead of waiting forever.
+                downloadError = ex;
+                throw;
+            }
+            finally
+            {
+                gettingFile = false;
+                downloadFinished.Set();
+            }
         }
 
         /// <summary>
@@ -158,6 +183,51 @@ namespace QuikSync.NetWorks
         }
 
         /// <summary>
+        /// Function that downloads a file from Host to the given full path and returns when the file is completely received.
+        /// Made for previewing conflicted files, so the file does not have to be inside of the synchronized directory.
+        /// </summary>
+        /// <param name="rel">Relative path to download from Host.</param>
+        /// <param name="fullPath">Full local path to save the file to.</param>
+        public void DownloadFileToFullPath(string rel, string fullPath)
+        {
+            while (gettingFile && clientH.Connected)
+            {
+                Thread.Sleep(10);
+            }
+
+            downloadFinished.Reset();
+            downloadError = null;
+            DownloadFileTo = fullPath;
+
+            // The constructor already subscribed StreamReceived. Subscribing it twice would run the handler twice for
+            // one stream, so make sure there is exactly one subscription.
+            clientH.Events.StreamReceived -= StreamReceived;
+            clientH.Events.StreamReceived += StreamReceived;
+
+            try
+            {
+                SendMessage("!getFile " + rel);
+
+                // Keep waiting while the file is being received, give up if it did not even start.
+                while (!downloadFinished.Wait(msBeforeTimeOut))
+                {
+                    if (!gettingFile || !clientH.Connected)
+                        throw new TimeoutException($"Host did not send {rel}.");
+                }
+
+                if (downloadError != null)
+                    throw new IOException($"Could not save {rel}: {downloadError.Message}", downloadError);
+            }
+            finally
+            {
+                // The handler unsubscribes itself after a file. Arm exactly one again, like the constructor does,
+                // so the downloads of the synchronization that follows the preview work the same as without it.
+                clientH.Events.StreamReceived -= StreamReceived;
+                clientH.Events.StreamReceived += StreamReceived;
+            }
+        }
+
+        /// <summary>
         /// Function that send a request to a Host for getting list of all the existing files on Host.
         /// </summary>
         public void GetHostFileDataList()
@@ -213,7 +283,7 @@ namespace QuikSync.NetWorks
             UIHandler.PlayColorfulBarAnimation(true);
             GetHostFileDataList();
             UIHandler.WriteLog($"Recieved Host FileData list!", Color.Green);
-            Syncronizer sync = new Syncronizer(Filed.FilesData, FDGotFromServer);
+            Syncronizer sync = new Syncronizer(Filed.FilesData, FDGotFromServer, new FilePreviewer(Filed.RootPath, DownloadFileToFullPath));
 
             var fddList = sync.fdd.ToList();
 
